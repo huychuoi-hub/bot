@@ -1,13 +1,14 @@
 local RunService = game:GetService("RunService")
 local cloneref = (cloneref or clonereference or function(instance) return instance end)
+local lp = game.Players.LocalPlayer
 
 -- */ Load WindUI /* --
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
 -- */ Khởi tạo Window /* --
 local Window = WindUI:CreateWindow({
-    Title = "VTD HUB | GOM HITBOX TẠI CHỖ",
-    Folder = "VTD_GomAtMe",
+    Title = "VTD HUB | BRING ALL & MAX HITBOX",
+    Folder = "VTD_BringConfig",
     Icon = "solar:users-group-two-rounded-bold",
     OpenButton = {
         Title = "Mở Menu",
@@ -18,92 +19,114 @@ local Window = WindUI:CreateWindow({
 
 -- */ Cấu hình Global /* --
 getgenv().Config = {
-    GomEnabled = false,
+    BringEnabled = false,
+    HitboxEnabled = false,
     AutoM1 = false,
-    ToolName = "Tool1",
-    GomDistance = 3 -- Khoảng cách gom trước mặt (3 studs)
+    ToolName = "Tool1", -- Tên vật phẩm trong kho
+    GomDistance = 3,    -- Khoảng cách gom trước mặt
+    HitboxSize = 1000   -- Kích thước hitbox x1000
 }
 
--- */ Logic Gom Hitbox & Auto M1 /* --
+-- */ Logic xử lý chính (Main Loop) /* --
 RunService.Stepped:Connect(function()
-    local lp = game.Players.LocalPlayer
     local char = lp.Character
-    
-    if char and char:FindFirstChild("HumanoidRootPart") then
-        -- 1. Logic Gom toàn bộ người chơi về 1 chỗ (vị trí của mình)
-        if getgenv().Config.GomEnabled then
-            for _, player in ipairs(game.Players:GetPlayers()) do
-                if player ~= lp and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    -- Vị trí đích: Ngay trước mặt bạn một khoảng nhỏ
-                    local targetCFrame = char.HumanoidRootPart.CFrame * CFrame.new(0, 0, -getgenv().Config.GomDistance)
-                    
-                    -- Ép toàn bộ Hitbox (HRP) của đối thủ về đó
-                    player.Character.HumanoidRootPart.CFrame = targetCFrame
-                end
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+
+    -- 1. Logic Gom toàn bộ người chơi & Phóng to Hitbox
+    for _, player in ipairs(game.Players:GetPlayers()) do
+        if player ~= lp and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local targetHRP = player.Character.HumanoidRootPart
+            
+            -- Gom người chơi về một điểm trước mặt bạn
+            if getgenv().Config.BringEnabled then
+                targetHRP.CFrame = char.HumanoidRootPart.CFrame * CFrame.new(0, 0, -getgenv().Config.GomDistance)
+            end
+            
+            -- Phóng to Hitbox của người bị gom
+            if getgenv().Config.HitboxEnabled then
+                targetHRP.Size = Vector3.new(getgenv().Config.HitboxSize, getgenv().Config.HitboxSize, getgenv().Config.HitboxSize)
+                targetHRP.Transparency = 0.8
+                targetHRP.BrickColor = BrickColor.new("Really red")
+                targetHRP.CanCollide = false
             end
         end
+    end
 
-        -- 2. Logic Auto Equip & Nhấn M1
-        if getgenv().Config.AutoM1 then
-            local tool = char:FindFirstChild(getgenv().Config.ToolName) or lp.Backpack:FindFirstChild(getgenv().Config.ToolName)
-            if tool then
-                -- Tự cầm tool nếu đang trong Backpack
-                if tool.Parent == lp.Backpack then
-                    char.Humanoid:EquipTool(tool)
-                end
-                -- Kích hoạt chém M1
-                tool:Activate()
+    -- 2. Logic Auto Equip & Nhấn M1
+    if getgenv().Config.AutoM1 then
+        local tool = char:FindFirstChild(getgenv().Config.ToolName) or lp.Backpack:FindFirstChild(getgenv().Config.ToolName)
+        if tool then
+            -- Ép cầm vật phẩm từ kho ra tay
+            if tool.Parent == lp.Backpack then
+                char.Humanoid:EquipTool(tool)
             end
+            -- Nhấn chuột trái (M1)
+            tool:Activate()
         end
     end
 end)
 
 -- */ Giao diện Menu /* --
 local MainTab = Window:Tab({
-    Title = "Gom Mục Tiêu",
-    Icon = "solar:ghost-bold",
+    Title = "Gom & Diệt",
+    Icon = "solar:bolt-bold",
 })
 
-local CombatSection = MainTab:Section({ Title = "Chức Năng Gom" })
+local CombatSection = MainTab:Section({ Title = "Chức Năng Chính" })
 
 CombatSection:Toggle({
     Title = "Bật Gom Người Chơi",
-    Desc = "Hút tất cả đối thủ về 1 chỗ trước mặt bạn",
+    Desc = "Hút toàn bộ server về phía trước mặt bạn",
     Value = false,
     Callback = function(state)
-        getgenv().Config.GomEnabled = state
+        getgenv().Config.BringEnabled = state
     end,
 })
 
 CombatSection:Toggle({
-    Title = "Auto M1 (Tool1)",
-    Desc = "Tự cầm vũ khí và chém liên tục vào chỗ gom",
+    Title = "Bật Hitbox x1000",
+    Desc = "Phóng to vùng va chạm của đối thủ",
+    Value = false,
+    Callback = function(state)
+        getgenv().Config.HitboxEnabled = state
+        if not state then
+            -- Reset hitbox khi tắt
+            for _, p in pairs(game.Players:GetPlayers()) do
+                pcall(function() p.Character.HumanoidRootPart.Size = Vector3.new(2, 2, 1) end)
+            end
+        end
+    end,
+})
+
+CombatSection:Toggle({
+    Title = "Auto Equip & M1",
+    Desc = "Tự lấy vật phẩm và chém liên tục",
     Value = false,
     Callback = function(state)
         getgenv().Config.AutoM1 = state
     end,
 })
 
-CombatSection:Slider({
-    Title = "Khoảng cách Gom",
-    Step = 1,
-    Value = { Min = 0, Max = 10, Default = 3 },
-    Callback = function(val)
-        getgenv().Config.GomDistance = val
-    end,
-})
-
 CombatSection:Input({
-    Title = "Tên Tool",
+    Title = "Tên Vật Phẩm (Tool)",
     Value = "Tool1",
     Callback = function(val)
         getgenv().Config.ToolName = val
     end,
 })
 
--- */ Notify /* --
+CombatSection:Slider({
+    Title = "Kích thước Hitbox",
+    Step = 10,
+    Value = { Min = 2, Max = 1000, Default = 1000 },
+    Callback = function(val)
+        getgenv().Config.HitboxSize = val
+    end,
+})
+
+-- */ Thông báo /* --
 WindUI:Notify({
     Title = "VTD HUB",
-    Content = "Đã sẵn sàng gom đối thủ về một chỗ!",
+    Content = "Script đã sẵn sàng gom mục tiêu!",
     Duration = 5
 })
