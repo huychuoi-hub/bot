@@ -1,113 +1,120 @@
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+local RunService = game:GetService("RunService")
+local cloneref = (cloneref or clonereference or function(instance) return instance end)
 
--- Bảng Setting của bạn
-getgenv().Setting = {
-    ["Item"] = {
-        ["Melee"] = {["Enable"] = true, ["Z"] = {["Enable"] = true, ["Hold Time"] = 1}, ["X"] = {["Enable"] = true, ["Hold Size"] = 0}, ["C"] = {["Enable"] = true, ["Hold Time"] = 0}},
-        ["Sword"] = {["Enable"] = true, ["Z"] = {["Enable"] = true, ["Hold Time"] = 0.3}, ["X"] = {["Enable"] = true, ["Hold Time"] = 0.2}},
+-- */ Tải Thư Viện WindUI /* --
+local WindUI
+do
+    local ok, result = pcall(function()
+        return require("./src/Init")
+    end)
+    if ok then
+        WindUI = result
+    else
+        WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+    end
+end
+
+-- */ Khởi Tạo Cửa Sổ /* --
+local Window = WindUI:CreateWindow({
+    Title = "VTD HUB | Hitbox & Combat",
+    Folder = "VTDSettings",
+    Icon = "solar:shield-warning-bold",
+    OpenButton = {
+        Title = "Mở Menu",
+        Enabled = true,
+        Draggable = true,
     }
+})
+
+-- */ Biến Cấu Hình /* --
+getgenv().Config = {
+    HitboxActive = false,
+    HitboxSize = 10,
+    AutoM1 = false,
+    ToolName = "Tool1" -- Đặt tên Tool của bạn ở đây
 }
 
-local Window = WindUI:CreateWindow({
-    Title = "VTD ULTRA FIX | AUTO COMBAT",
-    Icon = "solar:bolt-circle-bold",
-    Folder = "VTD_Hub",
-    Size = UDim2.fromOffset(500, 400),
-    OpenButton = { Enabled = true, Draggable = true },
-})
-
-local CombatTab = Window:Tab({ Title = "Combat", Icon = "solar:swords-bold" })
-local HuntSection = CombatTab:Section({ Title = "Điều Khiển", Opened = true })
-
-local SelectedPlayer = ""
-local vim = game:GetService("VirtualInputManager")
-
--- HÀM ÉP CẦM TOOL (FIX LỖI KHÔNG CẦM)
-local function ForceEquip()
-    local lp = game.Players.LocalPlayer
-    if not lp.Character:FindFirstChildOfClass("Tool") then
-        local tool = lp.Backpack:FindFirstChildOfClass("Tool")
-        if tool then
-            lp.Character.Humanoid:EquipTool(tool)
-            task.wait(0.1) -- Đợi 1 chút để game nhận diện đã cầm đồ
+-- */ Logic Hitbox & Auto M1 /* --
+task.spawn(function()
+    while task.wait(0.5) do
+        if getgenv().Config.HitboxActive then
+            for _, player in ipairs(game.Players:GetPlayers()) do
+                if player ~= game.Players.LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    local hrp = player.Character.HumanoidRootPart
+                    hrp.Size = Vector3.new(getgenv().Config.HitboxSize, getgenv().Config.HitboxSize, getgenv().Config.HitboxSize)
+                    hrp.Transparency = 0.7
+                    hrp.BrickColor = BrickColor.new("Really blue")
+                    hrp.CanCollide = false
+                end
+            end
         end
     end
-end
+end)
 
--- HÀM NHẤN PHÍM CỰC MẠNH
-local function ForceKey(key, hold)
-    vim:SendKeyEvent(true, key, false, game)
-    if hold and hold > 0 then task.wait(hold) end
-    vim:SendKeyEvent(false, key, false, game)
-end
+task.spawn(function()
+    while task.wait(0.1) do
+        if getgenv().Config.AutoM1 then
+            local lp = game.Players.LocalPlayer
+            local tool = lp.Character:FindFirstChild(getgenv().Config.ToolName) or lp.Backpack:FindFirstChild(getgenv().Config.ToolName)
+            
+            if tool then
+                -- Kiểm tra khoảng cách với mục tiêu gần nhất
+                for _, target in ipairs(game.Players:GetPlayers()) do
+                    if target ~= lp and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                        local distance = (lp.Character.HumanoidRootPart.Position - target.Character.HumanoidRootPart.Position).Magnitude
+                        -- Nếu hitbox chụm lại (khoảng cách gần) thì tự động đánh
+                        if distance < (getgenv().Config.HitboxSize / 2 + 3) then
+                            tool:Activate()
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
 
--- UI
-HuntSection:Toggle({
-    Title = "BẬT TRUY ĐUỔI + SPAM TẤT CẢ",
+-- */ Giao Diện Người Dùng (Tabs) /* --
+local MainTab = Window:Tab({
+    Title = "Chiến Đấu",
+    Icon = "solar:fire-bold",
+})
+
+local CombatSection = MainTab:Section({ Title = "Tính Năng Hitbox" })
+
+CombatSection:Toggle({
+    Title = "Bật Hitbox Lớn",
     Value = false,
     Callback = function(state)
-        _G.AutoKill = state
-        if state then
-            task.spawn(function()
-                while _G.AutoKill do
-                    pcall(function()
-                        local target = game.Players:FindFirstChild(SelectedPlayer)
-                        local lp = game.Players.LocalPlayer
-                        
-                        if target and target.Character and lp.Character then
-                            -- 1. Dính chặt vào mục tiêu
-                            lp.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 2)
-                            
-                            -- 2. Kiểm tra và cầm Tool ngay lập tức
-                            ForceEquip()
-                            
-                            -- 3. Click chuột trái (Đánh thường)
-                            vim:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-                            vim:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-
-                            -- 4. Spam phím 1-2-3-4 để đổi vũ khí liên tục
-                            for i = 1, 4 do
-                                ForceKey(tostring(i), 0)
-                            end
-
-                            -- 5. Spam chiêu theo Setting của bạn
-                            for cat, conf in pairs(getgenv().Setting.Item) do
-                                if conf.Enable then
-                                    for _, key in pairs({"Z", "X", "C", "V"}) do
-                                        if conf[key] and conf[key].Enable then
-                                            ForceKey(key, conf[key]["Hold Time"])
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end)
-                    task.wait(0.05) -- Tốc độ cực nhanh
-                end
-            end)
+        getgenv().Config.HitboxActive = state
+        if not state then
+            -- Reset lại hitbox khi tắt
+            for _, p in pairs(game.Players:GetPlayers()) do
+                pcall(function() p.Character.HumanoidRootPart.Size = Vector3.new(2,2,1) end)
+            end
         end
-    end
+    end,
 })
 
-local TargetDropdown = HuntSection:Dropdown({
-    Title = "Chọn mục tiêu",
-    Values = (function()
-        local t = {}
-        for _, v in pairs(game.Players:GetPlayers()) do
-            if v ~= game.Players.LocalPlayer then table.insert(t, v.Name) end
-        end
-        return t
-    end)(),
-    Callback = function(v) SelectedPlayer = v end
+CombatSection:Slider({
+    Title = "Kích Thước Hitbox",
+    Step = 1,
+    Value = { Min = 2, Max = 50, Default = 10 },
+    Callback = function(val)
+        getgenv().Config.HitboxSize = val
+    end,
 })
 
-HuntSection:Button({
-    Title = "Làm mới danh sách",
-    Callback = function()
-        local t = {}
-        for _, v in pairs(game.Players:GetPlayers()) do
-            if v ~= game.Players.LocalPlayer then table.insert(t, v.Name) end
-        end
-        TargetDropdown:Refresh(t)
-    end
+CombatSection:Toggle({
+    Title = "Auto M1 (Khi gần Hitbox)",
+    Value = false,
+    Callback = function(state)
+        getgenv().Config.AutoM1 = state
+    end,
+})
+
+-- */ Thông báo /* --
+WindUI:Notify({
+    Title = "Hệ Thống",
+    Content = "Script đã tải thành công!",
+    Duration = 3
 })
