@@ -6,11 +6,11 @@ local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footag
 
 -- */ Khởi tạo Window /* --
 local Window = WindUI:CreateWindow({
-    Title = "VTD PREMIUM | HITBOX GOM",
-    Folder = "VTD_Configs",
-    Icon = "solar:target-bold",
+    Title = "VTD HUB | GOM HITBOX TẠI CHỖ",
+    Folder = "VTD_GomAtMe",
+    Icon = "solar:users-group-two-rounded-bold",
     OpenButton = {
-        Title = "Mở VTD Hub",
+        Title = "Mở Menu",
         Enabled = true,
         Draggable = true,
     }
@@ -18,45 +18,41 @@ local Window = WindUI:CreateWindow({
 
 -- */ Cấu hình Global /* --
 getgenv().Config = {
-    HitboxEnabled = false,
-    HitboxSize = 20,
+    GomEnabled = false,
     AutoM1 = false,
-    ToolName = "Tool1" -- Thay đổi tên Tool của bạn ở đây
+    ToolName = "Tool1",
+    GomDistance = 3 -- Khoảng cách gom trước mặt (3 studs)
 }
 
 -- */ Logic Gom Hitbox & Auto M1 /* --
-RunService.RenderStepped:Connect(function()
-    if getgenv().Config.HitboxEnabled then
-        for _, player in ipairs(game.Players:GetPlayers()) do
-            if player ~= game.Players.LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                local hrp = player.Character.HumanoidRootPart
-                -- Làm to hitbox để "gom" diện tích va chạm lại
-                hrp.Size = Vector3.new(getgenv().Config.HitboxSize, getgenv().Config.HitboxSize, getgenv().Config.HitboxSize)
-                hrp.Transparency = 0.8
-                hrp.BrickColor = BrickColor.new("Really red")
-                hrp.Material = Enum.Material.Neon
-                hrp.CanCollide = false
+RunService.Stepped:Connect(function()
+    local lp = game.Players.LocalPlayer
+    local char = lp.Character
+    
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        -- 1. Logic Gom toàn bộ người chơi về 1 chỗ (vị trí của mình)
+        if getgenv().Config.GomEnabled then
+            for _, player in ipairs(game.Players:GetPlayers()) do
+                if player ~= lp and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    -- Vị trí đích: Ngay trước mặt bạn một khoảng nhỏ
+                    local targetCFrame = char.HumanoidRootPart.CFrame * CFrame.new(0, 0, -getgenv().Config.GomDistance)
+                    
+                    -- Ép toàn bộ Hitbox (HRP) của đối thủ về đó
+                    player.Character.HumanoidRootPart.CFrame = targetCFrame
+                end
             end
         end
-    end
 
-    if getgenv().Config.AutoM1 then
-        local lp = game.Players.LocalPlayer
-        local char = lp.Character
-        if char then
-            -- Tìm Tool1 trong nhân vật (đang cầm trên tay)
-            local tool = char:FindFirstChild(getgenv().Config.ToolName)
-            if tool and tool:IsA("Tool") then
-                -- Kiểm tra xem có ai gần đó không để nhấn M1
-                for _, target in ipairs(game.Players:GetPlayers()) do
-                    if target ~= lp and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-                        local dist = (char.HumanoidRootPart.Position - target.Character.HumanoidRootPart.Position).Magnitude
-                        -- Nếu đối thủ nằm trong vùng hitbox đã gom
-                        if dist <= (getgenv().Config.HitboxSize / 2 + 5) then
-                            tool:Activate() -- Tương ứng nhấn chuột trái (M1)
-                        end
-                    end
+        -- 2. Logic Auto Equip & Nhấn M1
+        if getgenv().Config.AutoM1 then
+            local tool = char:FindFirstChild(getgenv().Config.ToolName) or lp.Backpack:FindFirstChild(getgenv().Config.ToolName)
+            if tool then
+                -- Tự cầm tool nếu đang trong Backpack
+                if tool.Parent == lp.Backpack then
+                    char.Humanoid:EquipTool(tool)
                 end
+                -- Kích hoạt chém M1
+                tool:Activate()
             end
         end
     end
@@ -64,48 +60,41 @@ end)
 
 -- */ Giao diện Menu /* --
 local MainTab = Window:Tab({
-    Title = "Main Cheats",
-    Icon = "solar:fire-bold",
+    Title = "Gom Mục Tiêu",
+    Icon = "solar:ghost-bold",
 })
 
-local CombatSection = MainTab:Section({ Title = "Hitbox & Combat" })
+local CombatSection = MainTab:Section({ Title = "Chức Năng Gom" })
 
 CombatSection:Toggle({
-    Title = "Bật Gom Hitbox",
-    Desc = "Làm to hitbox đối thủ để dễ đánh trúng",
+    Title = "Bật Gom Người Chơi",
+    Desc = "Hút tất cả đối thủ về 1 chỗ trước mặt bạn",
     Value = false,
     Callback = function(state)
-        getgenv().Config.HitboxEnabled = state
-        if not state then
-            -- Reset về mặc định khi tắt
-            for _, p in pairs(game.Players:GetPlayers()) do
-                pcall(function() p.Character.HumanoidRootPart.Size = Vector3.new(2, 2, 1) end)
-            end
-        end
-    end,
-})
-
-CombatSection:Slider({
-    Title = "Kích thước Gom",
-    Step = 1,
-    Value = { Min = 2, Max = 100, Default = 20 },
-    Callback = function(val)
-        getgenv().Config.HitboxSize = val
+        getgenv().Config.GomEnabled = state
     end,
 })
 
 CombatSection:Toggle({
     Title = "Auto M1 (Tool1)",
-    Desc = "Tự động chém khi đối thủ trong tầm",
+    Desc = "Tự cầm vũ khí và chém liên tục vào chỗ gom",
     Value = false,
     Callback = function(state)
         getgenv().Config.AutoM1 = state
     end,
 })
 
+CombatSection:Slider({
+    Title = "Khoảng cách Gom",
+    Step = 1,
+    Value = { Min = 0, Max = 10, Default = 3 },
+    Callback = function(val)
+        getgenv().Config.GomDistance = val
+    end,
+})
+
 CombatSection:Input({
     Title = "Tên Tool",
-    Placeholder = "Nhập tên Tool1...",
     Value = "Tool1",
     Callback = function(val)
         getgenv().Config.ToolName = val
@@ -114,7 +103,7 @@ CombatSection:Input({
 
 -- */ Notify /* --
 WindUI:Notify({
-    Title = "VTD Hub",
-    Content = "Script đã sẵn sàng!",
+    Title = "VTD HUB",
+    Content = "Đã sẵn sàng gom đối thủ về một chỗ!",
     Duration = 5
 })
