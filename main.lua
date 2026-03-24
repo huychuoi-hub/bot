@@ -1,161 +1,113 @@
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
--- */ BẢNG SETTING CỦA BẠN /* --
+-- Bảng Setting của bạn
 getgenv().Setting = {
-    ["Team"] = "Pirates",
-    ["Chat"] = {},
-    ["Skip Race V4"] = true,
-    ["Misc"] = {
-        ["Enable Lock Bounty"] = false,
-        ["Lock Bounty"] = {0, 300000000},
-        ["Lock Camera"] = true,
-        ["Enable Cam Farm"] = false,
-        ["White Screen"] = false,
-        ["FPS Boost"] = false,
-        ["Random & Store Fruit"] = true
-    },
     ["Item"] = {
-        ["Melee"] = {["Enable"] = true, ["Z"] = {["Enable"] = true, ["Hold Time"] = 1}, ["X"] = {["Enable"] = true, ["Hold Time"] = 0}, ["C"] = {["Enable"] = true, ["Hold Time"] = 0}},
-        ["Blox Fruit"] = {["Enable"] = false, ["Z"] = {["Enable"] = true, ["Hold Time"] = 1.5}, ["X"] = {["Enable"] = true, ["Hold Time"] = 0}, ["C"] = {["Enable"] = true, ["Hold Time"] = 0}, ["V"] = {["Enable"] = true, ["Hold Time"] = 0}, ["F"] = {["Enable"] = true, ["Hold Time"] = 0}},
+        ["Melee"] = {["Enable"] = true, ["Z"] = {["Enable"] = true, ["Hold Time"] = 1}, ["X"] = {["Enable"] = true, ["Hold Size"] = 0}, ["C"] = {["Enable"] = true, ["Hold Time"] = 0}},
         ["Sword"] = {["Enable"] = true, ["Z"] = {["Enable"] = true, ["Hold Time"] = 0.3}, ["X"] = {["Enable"] = true, ["Hold Time"] = 0.2}},
-        ["Gun"] = {["Enable"] = false, ["Z"] = {["Enable"] = true, ["Hold Time"] = 0.5}, ["X"] = {["Enable"] = true, ["Hold Time"] = 0.3}}
     }
 }
 
--- */ KHỞI TẠO WINDOW /* --
 local Window = WindUI:CreateWindow({
-    Title = "VTD PREMIUM | WindUI",
+    Title = "VTD ULTRA FIX | AUTO COMBAT",
     Icon = "solar:bolt-circle-bold",
     Folder = "VTD_Hub",
-    OpenButton = {
-        Enabled = true,
-        Draggable = true,
-    },
+    Size = UDim2.fromOffset(500, 400),
+    OpenButton = { Enabled = true, Draggable = true },
 })
 
--- */ BIẾN HỖ TRỢ /* --
-local SelectedPlayer = ""
-local TargetDropdown
+local CombatTab = Window:Tab({ Title = "Combat", Icon = "solar:swords-bold" })
+local HuntSection = CombatTab:Section({ Title = "Điều Khiển", Opened = true })
 
--- */ HÀM TỰ ĐỘNG CẦM VŨ KHÍ /* --
-local function AutoEquip(category)
+local SelectedPlayer = ""
+local vim = game:GetService("VirtualInputManager")
+
+-- HÀM ÉP CẦM TOOL (FIX LỖI KHÔNG CẦM)
+local function ForceEquip()
     local lp = game.Players.LocalPlayer
-    for _, tool in pairs(lp.Backpack:GetChildren()) do
-        if tool:IsA("Tool") and (tool.ToolTip == category or tool.Name:find(category)) then
+    if not lp.Character:FindFirstChildOfClass("Tool") then
+        local tool = lp.Backpack:FindFirstChildOfClass("Tool")
+        if tool then
             lp.Character.Humanoid:EquipTool(tool)
-            return true
+            task.wait(0.1) -- Đợi 1 chút để game nhận diện đã cầm đồ
         end
     end
-    return lp.Character:FindFirstChildOfClass("Tool") ~= nil
 end
 
--- */ HÀM SPAM CHIÊU /* --
-local function PressKey(key, holdTime)
-    local vim = game:GetService("VirtualInputManager")
+-- HÀM NHẤN PHÍM CỰC MẠNH
+local function ForceKey(key, hold)
     vim:SendKeyEvent(true, key, false, game)
-    if holdTime > 0 then task.wait(holdTime) end
+    if hold and hold > 0 then task.wait(hold) end
     vim:SendKeyEvent(false, key, false, game)
 end
 
--- */ TAB CHIẾN ĐẤU /* --
-local CombatTab = Window:Tab({
-    Title = "Combat",
-    Icon = "solar:swords-bold",
-})
-
-local HuntSection = CombatTab:Section({ Title = "Player Hunter" })
-
--- Dropdown chọn người chơi
-TargetDropdown = HuntSection:Dropdown({
-    Title = "Chọn mục tiêu",
-    Values = (function()
-        local tbl = {}
-        for _, v in pairs(game.Players:GetPlayers()) do
-            if v ~= game.Players.LocalPlayer then table.insert(tbl, v.Name) end
-        end
-        return tbl
-    end)(),
-    Callback = function(val) SelectedPlayer = val end
-})
-
--- Nút làm mới danh sách
-HuntSection:Button({
-    Title = "Làm mới danh sách",
-    Icon = "solar:refresh-bold",
-    Callback = function()
-        local newList = {}
-        for _, v in pairs(game.Players:GetPlayers()) do
-            if v ~= game.Players.LocalPlayer then table.insert(newList, v.Name) end
-        end
-        TargetDropdown:Refresh(newList)
-    end
-})
-
--- Toggle Bay đến + Spam
+-- UI
 HuntSection:Toggle({
-    Title = "Bay đến + Spam Tool & Skill",
+    Title = "BẬT TRUY ĐUỔI + SPAM TẤT CẢ",
     Value = false,
     Callback = function(state)
         _G.AutoKill = state
-        task.spawn(function()
-            while _G.AutoKill do
-                pcall(function()
-                    local target = game.Players:FindFirstChild(SelectedPlayer)
-                    local lp = game.Players.LocalPlayer
-                    if target and target.Character and lp.Character then
-                        -- Bay đến
-                        lp.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+        if state then
+            task.spawn(function()
+                while _G.AutoKill do
+                    pcall(function()
+                        local target = game.Players:FindFirstChild(SelectedPlayer)
+                        local lp = game.Players.LocalPlayer
                         
-                        -- Thực hiện hành động theo Setting
-                        for cat, conf in pairs(getgenv().Setting.Item) do
-                            if conf.Enable then
-                                AutoEquip(cat)
-                                -- Spam 1-4
-                                for i=1,4 do 
-                                    game:GetService("VirtualInputManager"):SendKeyEvent(true, tostring(i), false, game)
-                                    task.wait(0.01)
-                                    game:GetService("VirtualInputManager"):SendKeyEvent(false, tostring(i), false, game)
-                                end
-                                -- Spam Skills
-                                for _, key in pairs({"Z","X","C","V","F"}) do
-                                    if conf[key] and conf[key].Enable then
-                                        PressKey(key, conf[key]["Hold Time"])
+                        if target and target.Character and lp.Character then
+                            -- 1. Dính chặt vào mục tiêu
+                            lp.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 2)
+                            
+                            -- 2. Kiểm tra và cầm Tool ngay lập tức
+                            ForceEquip()
+                            
+                            -- 3. Click chuột trái (Đánh thường)
+                            vim:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                            vim:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+
+                            -- 4. Spam phím 1-2-3-4 để đổi vũ khí liên tục
+                            for i = 1, 4 do
+                                ForceKey(tostring(i), 0)
+                            end
+
+                            -- 5. Spam chiêu theo Setting của bạn
+                            for cat, conf in pairs(getgenv().Setting.Item) do
+                                if conf.Enable then
+                                    for _, key in pairs({"Z", "X", "C", "V"}) do
+                                        if conf[key] and conf[key].Enable then
+                                            ForceKey(key, conf[key]["Hold Time"])
+                                        end
                                     end
                                 end
-                                -- Click
-                                game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,true,game,0)
-                                game:GetService("VirtualInputManager"):SendMouseButtonEvent(0,0,0,false,game,0)
                             end
                         end
-                    end
-                end)
-                task.wait(0.1)
-            end
-        end)
+                    end)
+                    task.wait(0.05) -- Tốc độ cực nhanh
+                end
+            end)
+        end
     end
 })
 
--- */ TAB HỆ THỐNG /* --
-local MiscTab = Window:Tab({
-    Title = "Misc",
-    Icon = "solar:settings-bold",
+local TargetDropdown = HuntSection:Dropdown({
+    Title = "Chọn mục tiêu",
+    Values = (function()
+        local t = {}
+        for _, v in pairs(game.Players:GetPlayers()) do
+            if v ~= game.Players.LocalPlayer then table.insert(t, v.Name) end
+        end
+        return t
+    end)(),
+    Callback = function(v) SelectedPlayer = v end
 })
 
-MiscTab:Toggle({
-    Title = "FPS Boost",
-    Value = getgenv().Setting.Misc["FPS Boost"],
-    Callback = function(v) getgenv().Setting.Misc["FPS Boost"] = v end
-})
-
-MiscTab:Button({
-    Title = "Destroy UI",
-    Icon = "solar:trash-bin-trash-bold",
-    Callback = function() Window:Destroy() end
-})
-
--- Thông báo khi load xong
-WindUI:Notify({
-    Title = "VTD Hub Loaded",
-    Content = "Sử dụng Menu để bắt đầu đi săn!",
-    Duration = 5
+HuntSection:Button({
+    Title = "Làm mới danh sách",
+    Callback = function()
+        local t = {}
+        for _, v in pairs(game.Players:GetPlayers()) do
+            if v ~= game.Players.LocalPlayer then table.insert(t, v.Name) end
+        end
+        TargetDropdown:Refresh(t)
+    end
 })
